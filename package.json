@@ -9,6 +9,7 @@
     "export": "next build",
     "lint": "next lint",
     "tunnel:sync": "node scripts/sync-tunnel.js",
+    "tunnel:auto": "node scripts/auto-tunnel.js",
     "cleanup": "node scripts/cleanup-for-pages.js"
   },
   "dependencies": {
