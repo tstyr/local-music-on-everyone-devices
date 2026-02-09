@@ -13,7 +13,7 @@ const { spawn } = require('child_process');
 const https = require('https');
 const http = require('http');
 
-const WORKERS_URL = process.env.WORKERS_URL || 'https://music.haka01xx.workers.dev/tunnel';
+const WORKERS_URL = process.env.WORKERS_URL || 'https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel';
 const SERVER_PORT = process.env.PORT || 3000;
 
 console.log('🚀 自動トンネル起動スクリプト');

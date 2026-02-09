@@ -2,7 +2,7 @@
 
 const API_URL_KEY = 'music_server_api_url';
 const TUNNEL_URL_KEY = 'music_server_tunnel_url';
-const WORKERS_URL = 'https://music.haka01xx.workers.dev/tunnel';
+const WORKERS_URL = 'https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel';
 const DEFAULT_API_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
 /**

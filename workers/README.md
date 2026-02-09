@@ -92,24 +92,24 @@ wrangler deploy
 
 ```bash
 # URLを設定
-curl -X POST https://music.haka01xx.workers.dev/tunnel \
+curl -X POST https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel \
   -H "Content-Type: application/json" \
   -d '{"url":"https://test-123.trycloudflare.com"}'
 
 # URLを取得
-curl https://music.haka01xx.workers.dev/tunnel
+curl https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel
 ```
 
 ### ブラウザでテスト
 
 ```javascript
 // URLを取得
-fetch('https://music.haka01xx.workers.dev/tunnel')
+fetch('https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel')
   .then(r => r.json())
   .then(console.log);
 
 // URLを更新
-fetch('https://music.haka01xx.workers.dev/tunnel', {
+fetch('https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ url: 'https://test-123.trycloudflare.com' })

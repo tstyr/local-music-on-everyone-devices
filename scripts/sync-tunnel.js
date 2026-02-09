@@ -20,7 +20,7 @@ const https = require('https');
 const http = require('http');
 
 // 設定
-const WORKERS_URL = process.env.WORKERS_URL || 'https://music.haka01xx.workers.dev/tunnel';
+const WORKERS_URL = process.env.WORKERS_URL || 'https://local-music-on-everyone-devices.haka01xx.workers.dev/tunnel';
 
 // コマンドライン引数から取得
 const args = process.argv.slice(2);
