@@ -1,16 +1,13 @@
 /**
- * Cloudflare Workers - トンネルURL保管庫
+ * Cloudflare Workers - トンネルURL保管庫（KV対応版）
  * 
- * PC側から送信されたトンネルURLを保存し、
+ * PC側から送信されたトンネルURLをKVストレージに永続化し、
  * PWA側からの取得リクエストに応答します。
  * 
  * デプロイ方法:
- * 1. Cloudflare Dashboard → Workers → Create a Service
- * 2. このコードを貼り付け
- * 3. "Save and Deploy" をクリック
- * 
- * または Wrangler CLI:
- * wrangler deploy
+ * 1. KV Namespaceを作成: wrangler kv:namespace create "TUNNEL_KV"
+ * 2. wrangler.toml に KV ID を設定
+ * 3. wrangler deploy
  */
 
 export default {
@@ -34,18 +31,15 @@ export default {
     // GET /tunnel - トンネルURLを取得
     if (request.method === 'GET' && url.pathname === '/tunnel') {
       try {
-        // KVストレージから取得（KVを使用する場合）
-        // const tunnelUrl = await env.TUNNEL_KV.get('current_tunnel_url');
+        // KVストレージから取得
+        const data = await env.TUNNEL_KV.get('current_tunnel_url', 'json');
         
-        // または環境変数から取得（シンプルな方法）
-        const tunnelUrl = env.TUNNEL_URL || null;
-        
-        if (!tunnelUrl) {
+        if (!data || !data.url) {
           return new Response(JSON.stringify({
-            error: 'No tunnel URL available',
+            url: null,
             message: 'トンネルURLが設定されていません'
           }), {
-            status: 404,
+            status: 200,
             headers: {
               'Content-Type': 'application/json',
               ...corsHeaders
@@ -54,8 +48,8 @@ export default {
         }
 
         return new Response(JSON.stringify({
-          url: tunnelUrl,
-          timestamp: new Date().toISOString()
+          url: data.url,
+          updatedAt: data.updatedAt
         }), {
           status: 200,
           headers: {
@@ -65,7 +59,7 @@ export default {
         });
       } catch (error) {
         return new Response(JSON.stringify({
-          error: 'Internal server error',
+          error: 'KV読み取りエラー',
           message: error.message
         }), {
           status: 500,
@@ -83,9 +77,9 @@ export default {
         const body = await request.json();
         const { url: tunnelUrl } = body;
 
-        if (!tunnelUrl) {
+        if (!tunnelUrl || typeof tunnelUrl !== 'string') {
           return new Response(JSON.stringify({
-            error: 'Missing URL',
+            error: 'URLが必要です',
             message: 'URLが指定されていません'
           }), {
             status: 400,
@@ -96,13 +90,15 @@ export default {
           });
         }
 
-        // URLの検証
-        try {
-          new URL(tunnelUrl);
-        } catch (e) {
+        // URL形式の検証
+        const isValid = 
+          (tunnelUrl.startsWith('https://') && tunnelUrl.includes('.trycloudflare.com')) ||
+          tunnelUrl.startsWith('http://localhost:');
+
+        if (!isValid) {
           return new Response(JSON.stringify({
-            error: 'Invalid URL',
-            message: '無効なURLです'
+            error: '不正なURL形式です',
+            message: 'Cloudflare TunnelのURLまたはlocalhost URLを指定してください'
           }), {
             status: 400,
             headers: {
@@ -112,17 +108,19 @@ export default {
           });
         }
 
-        // KVストレージに保存（KVを使用する場合）
-        // await env.TUNNEL_KV.put('current_tunnel_url', tunnelUrl);
+        // KVストレージに保存
+        const data = {
+          url: tunnelUrl,
+          updatedAt: new Date().toISOString()
+        };
         
-        // 注意: 環境変数は読み取り専用なので、実際にはKVストレージを使用する必要があります
-        // この例では、レスポンスのみ返します
+        await env.TUNNEL_KV.put('current_tunnel_url', JSON.stringify(data));
         
         return new Response(JSON.stringify({
           success: true,
-          url: tunnelUrl,
-          message: 'トンネルURLを更新しました',
-          timestamp: new Date().toISOString()
+          url: data.url,
+          updatedAt: data.updatedAt,
+          message: 'トンネルURLを保存しました'
         }), {
           status: 200,
           headers: {
@@ -132,7 +130,7 @@ export default {
         });
       } catch (error) {
         return new Response(JSON.stringify({
-          error: 'Internal server error',
+          error: 'KV書き込みエラー',
           message: error.message
         }), {
           status: 500,

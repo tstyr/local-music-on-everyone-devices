@@ -1,40 +1,13 @@
 # Cloudflare Workers - トンネルURL保管庫
 
-このWorkersは、PC側から送信されたトンネルURLを保存し、PWA側からの取得リクエストに応答します。
+このWorkersは、PC側から送信されたトンネルURLをKVストレージに永続化し、PWA側からの取得リクエストに応答します。
 
-## 🚀 デプロイ方法
+## 🚀 セットアップ手順
 
-### 方法1: Cloudflare Dashboard（簡単）
-
-1. [Cloudflare Dashboard](https://dash.cloudflare.com/) にログイン
-2. "Workers & Pages" → "Create application" → "Create Worker" をクリック
-3. Worker名を入力（例: `music-tunnel-storage`）
-4. "Deploy" をクリック
-5. "Edit code" をクリック
-6. `tunnel-storage.js` の内容をコピー＆ペースト
-7. "Save and Deploy" をクリック
-
-### 方法2: Wrangler CLI（推奨）
+### 1. KV Namespaceの作成
 
 ```bash
-# Wranglerのインストール
-npm install -g wrangler
-
-# ログイン
-wrangler login
-
-# デプロイ
 cd workers
-wrangler deploy
-```
-
-## 🔧 KVストレージの設定（推奨）
-
-環境変数は読み取り専用なので、動的にURLを更新するにはKVストレージを使用します。
-
-### 1. KVネームスペースの作成
-
-```bash
 wrangler kv:namespace create "TUNNEL_KV"
 ```
 
@@ -48,13 +21,15 @@ Add the following to your configuration file in your kv_namespaces array:
 
 ### 2. wrangler.tomlの更新
 
+`wrangler.toml` を開き、取得したIDを設定：
+
 ```toml
 [[kv_namespaces]]
 binding = "TUNNEL_KV"
-id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # 上記で取得したID
+id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # ← 上記で取得したID
 ```
 
-### 3. 再デプロイ
+### 3. デプロイ
 
 ```bash
 wrangler deploy
@@ -69,15 +44,15 @@ wrangler deploy
 **レスポンス例（成功）:**
 ```json
 {
-  "url": "https://xxx.trycloudflare.com",
-  "timestamp": "2024-02-09T12:00:00.000Z"
+  "url": "https://abc-123.trycloudflare.com",
+  "updatedAt": "2026-02-09T12:00:00.000Z"
 }
 ```
 
 **レスポンス例（未設定）:**
 ```json
 {
-  "error": "No tunnel URL available",
+  "url": null,
   "message": "トンネルURLが設定されていません"
 }
 ```
@@ -89,7 +64,7 @@ wrangler deploy
 **リクエストボディ:**
 ```json
 {
-  "url": "https://xxx.trycloudflare.com"
+  "url": "https://abc-123.trycloudflare.com"
 }
 ```
 
@@ -97,9 +72,17 @@ wrangler deploy
 ```json
 {
   "success": true,
-  "url": "https://xxx.trycloudflare.com",
-  "message": "トンネルURLを更新しました",
-  "timestamp": "2024-02-09T12:00:00.000Z"
+  "url": "https://abc-123.trycloudflare.com",
+  "updatedAt": "2026-02-09T12:00:00.000Z",
+  "message": "トンネルURLを保存しました"
+}
+```
+
+**レスポンス例（エラー）:**
+```json
+{
+  "error": "不正なURL形式です",
+  "message": "Cloudflare TunnelのURLまたはlocalhost URLを指定してください"
 }
 ```
 
@@ -109,27 +92,27 @@ wrangler deploy
 
 ```bash
 # URLを設定
-curl -X POST https://your-worker.workers.dev/tunnel \
+curl -X POST https://music.haka01xx.workers.dev/tunnel \
   -H "Content-Type: application/json" \
-  -d '{"url":"https://test.trycloudflare.com"}'
+  -d '{"url":"https://test-123.trycloudflare.com"}'
 
 # URLを取得
-curl https://your-worker.workers.dev/tunnel
+curl https://music.haka01xx.workers.dev/tunnel
 ```
 
 ### ブラウザでテスト
 
 ```javascript
 // URLを取得
-fetch('https://your-worker.workers.dev/tunnel')
+fetch('https://music.haka01xx.workers.dev/tunnel')
   .then(r => r.json())
   .then(console.log);
 
 // URLを更新
-fetch('https://your-worker.workers.dev/tunnel', {
+fetch('https://music.haka01xx.workers.dev/tunnel', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ url: 'https://test.trycloudflare.com' })
+  body: JSON.stringify({ url: 'https://test-123.trycloudflare.com' })
 })
   .then(r => r.json())
   .then(console.log);
@@ -137,43 +120,75 @@ fetch('https://your-worker.workers.dev/tunnel', {
 
 ## 🔒 セキュリティ
 
-本番環境では、以下のセキュリティ対策を検討してください：
+### URL検証
 
-1. **認証の追加**: POST /tunnel に認証を追加
-2. **レート制限**: Cloudflare Rate Limitingを使用
-3. **CORS制限**: 特定のオリジンのみ許可
+以下の形式のURLのみ受け付けます：
+- ✅ `https://*.trycloudflare.com`
+- ✅ `http://localhost:*`（開発用）
+- ❌ その他のURL
 
-### 認証の例
+### CORS設定
 
+すべてのオリジンからのアクセスを許可しています：
 ```javascript
-// tunnel-storage.js に追加
-const AUTH_TOKEN = env.AUTH_TOKEN; // Workersの環境変数
+'Access-Control-Allow-Origin': '*'
+```
 
-if (request.method === 'POST' && url.pathname === '/tunnel') {
-  const authHeader = request.headers.get('Authorization');
-  if (authHeader !== `Bearer ${AUTH_TOKEN}`) {
-    return new Response(JSON.stringify({
-      error: 'Unauthorized'
-    }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-  // ... 以下、既存のコード
+本番環境では、特定のオリジンのみ許可することを推奨します。
+
+## 📊 KVストレージ
+
+### データ形式
+
+```json
+{
+  "url": "https://abc-123.trycloudflare.com",
+  "updatedAt": "2026-02-09T12:00:00.000Z"
 }
 ```
 
-## 📊 モニタリング
+### KVキー
 
-Cloudflare Dashboardで以下を確認できます：
+- `current_tunnel_url`: 現在のトンネルURL
 
-- リクエスト数
-- エラー率
-- レスポンスタイム
-- KVストレージの使用量
+### 制限
+
+- 無料プラン: 1日100,000回の読み取り
+- 無料プラン: 1日1,000回の書き込み
+- ストレージ: 1GB
+
+## 🛠️ トラブルシューティング
+
+### KV Namespaceが見つからない
+
+```bash
+wrangler kv:namespace list
+```
+
+で既存のNamespaceを確認できます。
+
+### デプロイエラー
+
+```bash
+wrangler whoami
+```
+
+でログイン状態を確認してください。
+
+### URLが保存されない
+
+1. KV Namespace IDが正しく設定されているか確認
+2. `wrangler deploy` を実行したか確認
+3. ブラウザのコンソールでエラーを確認
 
 ## 💡 ヒント
 
-- KVストレージは無料プランで1日100,000回の読み取りが可能
-- Workersは無料プランで1日100,000リクエストまで
 - トンネルURLは頻繁に変更されないため、KVストレージで十分
+- Workersは無料プランで1日100,000リクエストまで
+- KVの読み取りは非常に高速（グローバルに分散）
+
+## 📚 参考リンク
+
+- [Cloudflare Workers ドキュメント](https://developers.cloudflare.com/workers/)
+- [KV ストレージ](https://developers.cloudflare.com/kv/)
+- [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/)
